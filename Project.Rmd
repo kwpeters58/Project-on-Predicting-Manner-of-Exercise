@@ -1,0 +1,129 @@
+---
+title: "Project on Predicting Manner of Exercise"
+output: html_document
+---
+
+```{r setup, include=FALSE, warning=FALSE, comment=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+# **Synopsis**
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, our goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: [link] http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+# **Data**
+
+The training data for this project are available here:
+
+[link] https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here:
+
+[link] https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+The data for this project come from this source: [link]http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har. 
+
+# Load the Required Packages 
+``` {r}
+library(caret)
+library(randomForest)
+library(e1071)
+library(rattle)
+```
+
+Load the Data
+
+```{r}
+pml_training = read.csv("pml-training.csv", na.strings=c("NA","#DIV/0!",""))
+pml_testing = read.csv("pml-testing.csv", na.strings=c("NA","#DIV/0!",""))
+```
+
+# Cleaning the Data
+## Remove the columns that are mostly (over 20%) NA's
+
+```{r}
+cleantrain <- pml_training[,colSums(is.na(pml_training)) <= .2*nrow(pml_training)]
+cleantest <-pml_testing[,colSums(is.na(pml_testing)) <= .2*nrow(pml_testing)]
+```
+
+## Remove the columns that do not pertain to our study
+```{r}
+cleantrain <- cleantrain[,-(1:7)]
+cleantest <- cleantest[,-(1:7)]
+```
+
+# Graph the classe variable
+
+```{r}
+library(ggplot2)
+g <- ggplot(cleantrain, aes(x = factor(classe))) + geom_bar(stat = "count", fill="red3", color = "blue")
+g <- g + ggtitle("Total number of each Classe")
+g <- g + xlab("Classe")
+g <- g + ylab("Count")
+g
+```
+
+## Create Training and Testing sets for our models
+# *Cross Validation*
+We will use 70% of cleantrain set data to built a model (training), and use the rest to test the model (training)
+
+``` {r}
+set.seed(1234)
+train <- createDataPartition(y=cleantrain$classe,p=.70,list=F)
+training <- cleantrain[train,]
+testing <- cleantrain[-train,]
+head(cleantrain)
+```
+
+## Create a Decision Tree for Prediction and Classification 
+
+``` {r}
+modFit <- train(classe ~ .,method="rpart",data=training)
+fancyRpartPlot(modFit$finalModel)
+```
+
+# Now, we will examine 3 methods for doing our prediction. Random Forests (rf), Support vector machine(svm) and Linear discriminant analysis (lda). 
+
+* We will:
+  + Fit the Model
+  + Use the Model to Predict on the Test set
+  + Creat the Confusion Matrix
+  + Find the Accuracy of the Model from the Confusion Matrix
+
+``` {r}
+fitrf <- train(classe ~ ., data=training, method="rf", trControl=trainControl(method="none"), tuneGrid=data.frame(mtry=7))
+
+fitsvm <- svm(as.factor(classe) ~. , data=training)
+fitlda <- train(as.factor(classe) ~ .,method="lda",data= training)
+predrf <- predict(fitrf, testing)
+predsvm <- predict(fitsvm, testing)
+predlda <- predict(fitlda, testing)
+confMrf <- confusionMatrix(predrf, as.factor(testing$classe))$overall[1]
+confsvm <- confusionMatrix(predsvm, as.factor(testing$classe))$overall[1]
+conflda <- confusionMatrix(predlda, as.factor(testing$classe))$overall[1]
+confMrf 
+confsvm 
+conflda
+```
+# We see Random Forest has the best accuracy but, we will use each model to make predictions on the cleantrain dataset.
+
+## Using Random Forest
+``` {r}
+Predictionrf <- predict(fitrf, newdata = cleantest)
+Predictionrf
+```
+
+## Using SVM
+``` {r}
+Predictionsvm <- predict(fitsvm, newdata = cleantest)
+Predictionsvm
+```
+
+
+## Using lda
+``` {r}
+Predictionlda <- predict(fitlda, newdata = cleantest)
+Predictionlda
+```
+## We use the Random Forest outcome for our predictions!
